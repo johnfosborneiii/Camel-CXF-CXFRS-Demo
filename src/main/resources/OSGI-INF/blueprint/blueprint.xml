@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<blueprint xmlns="http://www.osgi.org/xmlns/blueprint/v1.0.0"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:camel="http://camel.apache.org/schema/blueprint"
+       xmlns:cxf="http://camel.apache.org/schema/blueprint/cxf"
+       xsi:schemaLocation="
+       http://www.osgi.org/xmlns/blueprint/v1.0.0 http://www.osgi.org/xmlns/blueprint/v1.0.0/blueprint.xsd
+       http://camel.apache.org/schema/blueprint http://camel.apache.org/schema/blueprint/camel-blueprint.xsd
+       http://camel.apache.org/schema/blueprint/cxf http://camel.apache.org/schema/blueprint/camel-cxf.xsd"
+       >
+	   
+  <cxf:cxfEndpoint id="claimEndpoint" address="http://localhost:9191/cxf/claim" serviceClass="org.blogdemo.claimdemo.ClaimService" />
+  <cxf:rsServer id="statusEndpoint" address="http://localhost:9191/cxf/status" serviceClass="org.blogdemo.claimdemo.StatusService" />
+  
+  <bean class="org.blogdemo.claimdemo.ClaimProcessor" id="claimProcessor" />
+    
+	<camelContext id="blueprintContext" xmlns="http://camel.apache.org/schema/blueprint">
+    <route id="cxfRoute">
+        <from uri="cxf:bean:claimEndpoint"/>
+        <log message="${header.operationName}"/>
+        <recipientList>
+            <simple>direct:${header.operationName}</simple>
+        </recipientList>
+    </route>
+    <route>
+        <from uri="direct:apply"/>
+        <bean ref="claimProcessor" method="process"/>
+    </route>
+    <route>
+        <from uri="direct:cancel"/>
+        <bean ref="claimProcessor" method="cancel"/>
+    </route>
+    <route>
+        <from uri="cxfrs:bean:statusEndpoint"/>
+        <log message="${header.operationName}"/>
+        <choice>
+            <when>
+                <simple>${header.operationName} == "status"</simple>
+                <bean ref="claimProcessor" method="status"/>
+            </when>
+            <when>
+                <simple>${header.operationName} == "restCancel"</simple>
+                <setHeader headerName="operationName">
+                    <simple>cancel</simple>
+                </setHeader>
+                <bean ref="claimProcessor" method="prepareList"/>
+                <to uri="cxf:bean:claimEndpoint"/>
+            </when>
+        </choice>
+        <marshal>
+            <json library="Jackson"/>
+        </marshal>
+    </route>
+</camelContext>
+
+</blueprint>
